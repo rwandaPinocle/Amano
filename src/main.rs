@@ -1,4 +1,6 @@
 use chess::{ Board, MoveGen, Color, BoardStatus, ChessMove };
+use std::env;
+use std::io::{self, Read};
 use std::str::FromStr;
 mod piece_values;
 
@@ -10,12 +12,12 @@ fn calc_piece_value(pc_idx: usize, sq_idx: usize, color: Option<Color>) -> i64{
     match color {
         Some(Color::White) => {
             let sq_value = piece_values::PIECE_SQUARES[pc_idx][sq_idx];
-            println!("square value: {}", sq_value);
+            //println!("square value: {}", sq_value);
             return - (piece_values::PIECE_VALS[pc_idx] + sq_value);
         },
         Some(Color::Black) => {
             let sq_value = piece_values::PIECE_SQUARES[pc_idx][63 - sq_idx];
-            println!("square value: {}", sq_value);
+            //println!("square value: {}", sq_value);
             return piece_values::PIECE_VALS[pc_idx] + sq_value;
         },
         None => {
@@ -32,6 +34,7 @@ fn calc_pieces_value(board: &Board) -> i64{
         let bboard = *board.pieces(pc_type);
         for square in bboard {
             let sq_idx = square.to_index();
+            /*
             println!(
                 "rank: {}, file: {}, square index: {}, piece type: {}",
                 square.get_rank().to_index(),
@@ -39,6 +42,7 @@ fn calc_pieces_value(board: &Board) -> i64{
                 sq_idx,
                 pc_type,
             );
+            */
             result += calc_piece_value(pc_idx, sq_idx, board.color_on(square));
         }
     }
@@ -115,7 +119,7 @@ fn alpha_beta(
 }
 
 
-fn find_best_move(board: &Board) -> Option<ChessMove> {
+fn find_best_move(board: &Board, depth: i8) -> Option<ChessMove> {
     let black_move = board.side_to_move() == Color::Black;
     let moves = MoveGen::new_legal(board);
     let mut best_move = MoveGen::new_legal(board).nth(0);
@@ -129,20 +133,19 @@ fn find_best_move(board: &Board) -> Option<ChessMove> {
             |x: i64, y: i64| -> bool { x < y }
         }
     };
-    println!("searching across moves");
     let mut total = 0;
     for mv in moves {
         let mut new_board = Board::default();       
         board.make_move(mv, &mut new_board);
         let val = alpha_beta(
             &new_board,
-            2,
+            depth,
             black_move,
             i64::MIN,
             i64::MAX,
             &mut total
         );
-        println!("move: {}, val: {}", mv, val);
+        //println!("move: {}, val: {}", mv, val);
         if is_better(val, best_val) {
             best_val = val;
             best_move = Some(mv);
@@ -154,6 +157,74 @@ fn find_best_move(board: &Board) -> Option<ChessMove> {
 
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    println!("{:?}", args);
+
+    let ply_count: i8 = if args.len() >= 2 {
+        args[1].parse().unwrap()
+    } else {
+        println!("Specify ply count");
+        return;
+    };
+
+    let is_interactive = if args.len() >= 3 { &args[2] == "-i" } else { false };
+    let fen_str = if args.len() >= 4 { &args[3] } else { STARTING_FEN };
+
+    if !is_interactive {
+        match Board::from_str(fen_str) {
+            Err(_) => { println!("ERROR: Bad fen") }
+            Ok(mut board) => {
+                match find_best_move(&board, ply_count) {
+                    Some(n) => { println!("Best move: {}", n) },
+                    None => { println!("ERROR: No move found") },
+                }
+            }
+        }
+    } else {
+        match Board::from_str(fen_str) {
+            Err(_) => { println!("ERROR: Bad fen") }
+            Ok(mut board) => {
+                let mut ai_turn = true;
+                loop {
+                    if ai_turn {
+                        println!("Finding best move");
+                        match find_best_move(&mut board, ply_count) {
+                            Some(n) => { board = board.make_move_new(n) }
+                            None => { println!("ERROR: No move found") }
+                        }
+                        println!("------------------");
+                        println!("{}", board);
+                        println!("Your move");
+                        ai_turn = false;
+                    } else {
+                        match find_best_move(&mut board, ply_count) {
+                            Some(n) => {
+                                loop {
+                                    let mut buffer = String::new();
+                                    io::stdin().read_to_string(&mut buffer);
+                                    let mv_result = ChessMove::from_san(&board, &buffer);
+                                    match mv_result {
+                                        Ok(mv) => {
+                                            board = board.make_move_new(mv);
+                                            break;
+                                        }
+                                        Err(_) => { println!("Invalid move") }
+                                    }
+                                }
+                            }
+                            None => { println!("ERROR: No move found") }
+                        }
+                        println!("------------------");
+                        println!("{}", board);
+                        ai_turn = true;
+                    }
+                }
+            }
+        }
+
+    }
+
+    /*
     match Board::from_str(STARTING_FEN) {
         Ok(board) => {
             match find_best_move(&board) {
@@ -164,4 +235,5 @@ fn main() {
         }
         _ => { println!("ERROR: Invalid board") }
     };
+    */
 }
