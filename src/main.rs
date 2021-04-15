@@ -1,8 +1,13 @@
+extern crate args;
+extern crate getopts;
+
 use chess::{ Board, MoveGen, Color, BoardStatus, ChessMove };
 use std::env;
 use std::io::{self, Read};
 use std::str::FromStr;
-extern crate args;
+use args::{Args, ArgsError};
+use args::validations::{Order, OrderValidation};
+use getopts::Occur;
 mod piece_values;
 
 const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -10,6 +15,7 @@ const TEST_FEN: &str = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0
 
 const PROGRAM_DESC: &'static str = "A good old fashioned Rust chess engine";
 const PROGRAM_NAME: &'static str = "Amano";
+
 
 fn calc_piece_value(pc_idx: usize, sq_idx: usize, color: Option<Color>) -> i64{
     match color {
@@ -159,26 +165,22 @@ fn find_best_move(board: &Board, depth: i8) -> Option<ChessMove> {
 }
 
 
-fn parse(input: &Vec<&str>) -> Result<(), ArgsError> {
+fn parse(input: &Vec<&str>, is_interactive: &mut bool, fen_str: &mut String) -> Result<(), ArgsError> {
     let mut args = Args::new(PROGRAM_NAME, PROGRAM_DESC);
     args.flag("h", "help", "Print the usage menu");
     args.flag("i", "interactive", "Run the engine in interactive mode");
-    args.option(
-        "d",
-        "depth",
-        "The depth of the tree search. Default = 4",
-        "DEPTH",
-        Occur::Req,
-        Some(4)
+    args.option("d", "depth", "The depth of the tree search. Default = 4",
+        "DEPTH", Occur::Req, Some("4".to_string())
     );
-    args.option(
-        "",
-        "",
-        "The state of the game as FEN",
-        "FEN",
-        Occur::Optional,
-        Some(STARTING_FEN)
+    args.option("", "", "The state of the game as FEN",
+        "FEN", Occur::Optional, Some(STARTING_FEN.to_string())
     );
+    let help: Result<(), ArgsError> = args.value_of("help");
+    match help {
+        Ok(_) => { args.full_usage(); return Ok(()); }
+        _ => {}
+    }
+    Ok(())
 }
 
 
